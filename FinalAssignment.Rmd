@@ -7,11 +7,14 @@ output: html_document
 
 ```{r markdown setup, include=F}
 knitr::opts_chunk$set(include=T, echo=T, warning=F, message=F, cache=T)
+setwd("~/Work/Training/PracticalMachineLearningCoursera.R")
 ```
 
+## Load datasets
 
-```{r setup, include=FALSE}
-setwd("~/Work/Training/PracticalMachineLearningCoursera.R")
+The following libraries are used for this project:
+
+```{r setup}
 library(data.table)
 library(caret)
 library(doMC)
@@ -20,7 +23,7 @@ registerDoMC(cores = 8)
 
 ## Load datasets
 
-The data were loaded and the training set was split into a training and test set. The test set will be used to estimate the out of sample error.
+The data were loaded and the training set was split into a training (80%) and test set (20%). The test set will be used to estimate the out-of-sample error.
 
 ```{r load}
 set.seed(3456)
@@ -34,7 +37,7 @@ TestingData = TrainTestData[-TrainIndex]
 
 ## Prepare data
 
-Many variable were encoded as character but were in fact numeric variables. Thus a large list of variables had to be converted to numeric. 
+Many variables were encoded as character but were in fact numeric variables. Thus a large list of variables had to be converted to numeric. 
 
 ```{r to numeric}
 CharNam = names(which(sapply(TrainingData, class)=="character"))
@@ -43,7 +46,7 @@ TrainingData[, (ToNum):=lapply(.SD, as.numeric), .SDcols=ToNum]
 ```
 ### Near zero variance
 
-The nearZeroVar function of the caret packet was used to identified the variable with problematic distributions.
+The nearZeroVar function of the caret packet was used to identified variables with problematic distributions.
 
 ```{r nzv}
 nzv <- nearZeroVar(TrainingData, saveMetrics= TRUE)
@@ -52,7 +55,7 @@ NoZeroVarNam = row.names(nzv[nzv$nzv==F, ])
 
 ### Missing values
 
-A list of variables with more than 90% of missing values was also created for removal.
+Variables with more than 90% of missing values was also removed from the analyses.
 
 ```{r missing values}
 PctNa = TrainingData[, lapply(.SD, function (X) {round(100*sum(is.na(X))/length(X))})]
@@ -61,7 +64,7 @@ LowNaNam = names(PctNa)[as.numeric(PctNa)<90]
 
 ### Other variable exclusion
 
-The outcome variable was removed from the list of input variables. For time measurement, only the cvtd_timestamp variable was kept in the model while the other two time variables were removed because they were redudant.
+The outcome variable was removed from the input variables. Only the cvtd_timestamp variable was kept in the model while the other 2 time variables were removed because they were redudant.
 
 ```{r other exclusion}
 ManualExcludeNam = c("V1", "classe", "raw_timestamp_part_1", "raw_timestamp_part_2")
@@ -70,7 +73,7 @@ InputTmp = setdiff(intersect(NoZeroVarNam, LowNaNam), ManualExcludeNam)
 
 ### Correlations
 
-Three variables highly correlated with others variables (>.90) were removed to avoid problems of multicolinarity.
+Three variables highly correlated with others variables (>.90) were removed to avoid multicolinarity.
 
 ```{r correlations}
 NumericNam = names(which(sapply(TrainingData, class)=="numeric"))
@@ -80,24 +83,25 @@ HighCorIdx = findCorrelation(Cor)
 HighCorNam = colnames(Cor)[HighCorIdx]
 ```
 
-The three variables with high correlation are: `r HighCorNam`.
+The 3 variables with high correlation are: `r HighCorNam`.
 
 ## Define input and ouput variables
 
-Here the input and output variables of the model were selected. Input variables with problematic distributions, many missing values or high correlations were removed.
+Here the input and output variables of the model were selected. Input variables with problematic distributions, many missing values or high correlations were removed. The model formula is given by:
 
 ```{r define in and out}
 InputNam = setdiff(InputTmp, HighCorNam)
 OutputNam = "classe"
 rhs = paste(InputNam, collapse = " + ")
 formulaTrain = as.formula(paste(OutputNam, rhs, sep=" ~ "))
+formulaTrain
 ```
 
-The final number of input variables was `r length(InputNam)`.
+The number of input variables was `r length(InputNam)`.
 
 ## Plot class frequency
 
-A barplot revealed that the 5 classes to predict were almost evenly distributed.
+A barplot revealed that the outcome variable was almost evenly distributed.
 
 ```{r plot class}
 ClassCount = table(TrainingData$classe, useNA="ifany") # no NA
@@ -114,7 +118,7 @@ lda.fit = train(formulaTrain, data=TrainingData, method="lda", trControl=tc)
 lda.fit
 ```
 
-The out-of-sample accuracy is 0.85 (0.15 error rate) and the confusion matrix is shown below:
+The out-of-sample accuracy was calculated on a separate test set and equals 0.85 (0.15 error rate). The confusion matrix on the test set is shown below:
 
 ```{r lda test error}
 LdaPredTest = predict(lda.fit, newdata = TestingData)
@@ -122,16 +126,9 @@ cm = confusionMatrix(data=LdaPredTest, reference=TestingData$classe)
 cm$table
 ```
 
-The prediction for the 20 cases are listed below.
-
-```{r lda predict}
-LdaPred = predict(lda.fit, newdata = PredictData)
-data.table(LdaPred)
-```
-
 ## Random forest
 
-The second model trained was a random forest. It was chosen because it generally offer a very good accuracy. A 10-fold cross validation was performed to estimate the hyperparameter that controls the number of variables selected randomly at each tree iteration.
+The second model trained was a random forest. It was chosen because it generally offers a very good accuracy. A 10-fold cross validation was performed to estimate the hyper-parameter that controls the number of variables selected randomly at each tree iteration.
 
 ```{r train random forest}
 tc = trainControl(method="cv", number=8)
@@ -140,7 +137,7 @@ randomForest.fit = train(formulaTrain, data=TrainingData, method="rf", trControl
 randomForest.fit
 ```
 
-The cross-validation reveased that between 4 and 6, 6 was the best value of the hyper-parameter. Here is the relative importance of the first 10 most important variables:
+The cross-validation revealed that between 4 and 6, the best value of the hyper-parameter was 6. Here is the relative importance of the first 10 most important variables:
 
 ```{r importance random forest}
 VarImp = varImp(randomForest.fit$finalModel)
@@ -148,14 +145,14 @@ VarImp = data.table(row.names(VarImp), VarImp[, 1])
 VarImpOrder = VarImp[order(V2, decreasing=T),]
 VarImpOrder$Order = 1:nrow(VarImpOrder)
 ImpVarNam = VarImpOrder[1:10, V1]
-ggplot(data=VarImpOrder[1:10], aes(x=reorder(V1, -Order, decreasing=F), y=V2)) + geom_bar(stat="identity") + coord_flip()
+ggplot(data=VarImpOrder[1:10], aes(x=reorder(V1, -Order, decreasing=F), y=V2)) + geom_bar(stat="identity") + labs(x = "Importance", y = "Variable") + coord_flip()
 ```
 
-The out-of-sample accuracy is 0.998 (0.002 error rate) and the confusion matrix is shown below:
+The out-of-sample accuracy was 0.998 (0.002 error rate) for the random forest and the confusion matrix is shown below:
 
 ```{r random forest test error}
 RfPredTest = predict(randomForest.fit, newdata = TestingData)
-cm = confusionMatrix(data=RfPredTest, reference=TestingData$classe) # accuracy=0.9977, Kappa=0.9977
+cm = confusionMatrix(data=RfPredTest, reference=TestingData$classe)
 cm$table # confusion matrix
 ```
 
