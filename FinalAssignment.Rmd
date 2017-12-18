@@ -140,7 +140,7 @@ randomForest.fit = train(formulaTrain, data=TrainingData, method="rf", trControl
 randomForest.fit
 ```
 
- The cross-validation reveased that between 4 and 6, 6 was the best value of the hyper-parameter. Here is the relative importance of the first 10 most important variables:
+The cross-validation reveased that between 4 and 6, 6 was the best value of the hyper-parameter. Here is the relative importance of the first 10 most important variables:
 
 ```{r importance random forest}
 VarImp = varImp(randomForest.fit$finalModel)
@@ -168,7 +168,7 @@ data.table(RfPred)
 
 ## Conclusion
 
-The random forest gave a higer out-of-sample accuracy compared to linear discriminant analysis.
+The random forest gave a higer out-of-sample accuracy compared to the linear discriminant analysis and was thus the selected model to make the final prediction on the 20 cases.
 
 
 
